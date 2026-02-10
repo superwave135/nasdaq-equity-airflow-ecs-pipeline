@@ -12,7 +12,7 @@ aws_region   = "ap-southeast-1"
 
 # image (below) with GX integrated into the main pipeline DAG flow (need to check vYYYYMMDD-hhmmss from the newly pushed image in ECR)
 # Update with the new fixed version
-airflow_docker_image = "881786084229.dkr.ecr.ap-southeast-1.amazonaws.com/nasdaq-airflow:vYYYYMMDD-hhmmss-gx-main-pipeline-integrated"
+airflow_docker_image = "XXXXXXXXXXXX.dkr.ecr.ap-southeast-1.amazonaws.com/nasdaq-airflow:vYYYYMMDD-hhmmss-gx-main-pipeline-integrated"
 
 # ============================================================================
 # DATABASE CONFIGURATION

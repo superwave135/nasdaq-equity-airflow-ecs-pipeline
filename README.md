@@ -15,7 +15,7 @@ EventBridge (daily schedule)
   Airflow DAG (ECS Fargate — LocalExecutor)
   ┌──────────────────────────────────────────────┐
   │  1. Extract     Lambda → FMP API → S3 (raw)  │
-  │  2. Validate    Great Expectations (raw)      │
+  │  2. Validate    Great Expectations (raw)     │
   │  3. Transform   Glue: dim_stock              │
   │  4. Transform   Glue: fact_daily_price       │
   │  5. Transform   Glue: weekly/monthly aggs    │
