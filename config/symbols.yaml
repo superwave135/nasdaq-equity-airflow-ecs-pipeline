@@ -1,0 +1,11 @@
+symbols:
+  tech_giants:
+    - AAPL
+    - GOOGL
+    - MSFT
+    - AMZN
+    - META
+  semiconductors:
+    - NVDA
+    - AMD
+    - INTC

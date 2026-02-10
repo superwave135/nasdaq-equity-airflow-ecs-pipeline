@@ -1,0 +1,62 @@
+######## This version uses local storage for testing 
+config_version: 3.0
+
+# Datasource configuration for Athena
+datasources:
+  nasdaq_athena_datasource:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      module_name: great_expectations.execution_engine
+      connection_string: ${GX_ATHENA_CONNECTION_STRING}
+    data_connectors:
+      default_runtime_data_connector:
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - default_identifier_name
+
+# Use local filesystem stores
+expectations_store_name: expectations_filesystem_store
+
+stores:
+  # Local filesystem stores - using relative paths from context root
+  expectations_filesystem_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectations/
+  
+  validations_filesystem_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/validations/
+  
+  checkpoint_filesystem_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: checkpoints/
+  
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore
+
+validations_store_name: validations_filesystem_store
+evaluation_parameter_store_name: evaluation_parameter_store
+checkpoint_store_name: checkpoint_filesystem_store
+
+# Local data docs
+data_docs_sites:
+  local_site:
+    class_name: SiteBuilder
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/data_docs/local_site/
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+# Disable anonymous usage statistics
+anonymous_usage_statistics:
+  enabled: false

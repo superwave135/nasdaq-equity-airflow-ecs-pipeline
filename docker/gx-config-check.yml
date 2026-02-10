@@ -1,0 +1,71 @@
+config_version: 3.0
+
+# Datasource configuration for Athena
+datasources:
+  nasdaq_athena_datasource:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      module_name: great_expectations.execution_engine
+      # Connection string for Athena in ap-southeast-1 region
+      connection_string: ${GX_ATHENA_CONNECTION_STRING}
+    data_connectors:
+      default_runtime_data_connector:
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - default_identifier_name
+
+# Store expectations in S3
+expectations_store_name: s3_expectations_store
+
+# Store configurations
+stores:
+  # Expectation suites stored in S3
+  s3_expectations_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: nasdaq-airflow-ecs-data-dev
+      prefix: great_expectations/expectations/
+
+  # Validation results stored in S3
+  s3_validations_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: nasdaq-airflow-ecs-data-dev
+      prefix: great_expectations/validations/
+
+  # Checkpoints stored in S3
+  checkpoint_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: nasdaq-airflow-ecs-data-dev
+      prefix: great_expectations/checkpoints/
+
+  # Evaluation parameter store (local)
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore
+
+validations_store_name: s3_validations_store
+evaluation_parameter_store_name: evaluation_parameter_store
+checkpoint_store_name: checkpoint_store
+
+# Data Docs configuration - hosted on S3 as static website
+data_docs_sites:
+  s3_site:
+    class_name: SiteBuilder
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: nasdaq-airflow-ecs-data-dev
+      prefix: great_expectations/data_docs/
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+# Disable anonymous usage statistics
+anonymous_usage_statistics:
+  enabled: false
+  data_context_id: nasdaq-airflow-pipeline

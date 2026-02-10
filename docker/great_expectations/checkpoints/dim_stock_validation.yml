@@ -1,0 +1,25 @@
+name: dim_stock_validation
+config_version: 1.0
+class_name: SimpleCheckpoint
+
+validations:
+  - batch_request:
+      datasource_name: nasdaq_athena_datasource
+      data_connector_name: default_runtime_data_connector
+      data_asset_name: dim_stock
+      runtime_parameters:
+        query: >
+          SELECT * FROM nasdaq_airflow_warehouse_dev.dim_stock
+      batch_identifiers:
+        default_identifier_name: "dim_stock_{{ execution_date }}"
+    
+    expectation_suite_name: dim_stock_suite
+
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction

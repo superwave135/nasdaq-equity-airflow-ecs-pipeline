@@ -1,0 +1,39 @@
+# AWS Provider for Lambda, Glue, S3, etc.
+apache-airflow-providers-amazon>=8.0.0
+
+# Core AWS SDK
+boto3>=1.28.0
+
+# Great Expectations for data quality validation
+great-expectations[athena]==0.18.19
+
+# Great Expectations provider for Airflow
+airflow-provider-great-expectations==0.2.9
+
+# PyAthena for Athena connectivity - FIXED VERSION (must be <3.0 for GX compatibility)
+PyAthena>=2.0.0,<3.0
+
+# SQLAlchemy compatibility (GX requires <2.0)
+sqlalchemy>=1.4.0,<2.0.0
+
+
+
+
+
+
+
+
+
+
+
+# # AWS Provider for Lambda, Glue, S3, etc.
+# apache-airflow-providers-amazon>=8.0.0
+
+# # Additional useful providers
+# boto3>=1.28.0
+
+# # Add Great Expectations
+# great-expectations[athena]==0.18.19
+# great-expectations-provider==0.2.7
+# PyAthena==3.0.10
+# sqlalchemy>=1.4.0,<2.0.0

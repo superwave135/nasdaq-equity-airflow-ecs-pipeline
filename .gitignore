@@ -1,0 +1,80 @@
+# Great Expectations
+docker/great_expectations/uncommitted/
+docker/great_expectations/.ge_store_backend_id
+docker/great_expectations/plugins/custom_data_docs/
+docker/great_expectations/.great_expectations.yml.backup
+
+# Python
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+
+
+
+
+
+
+
+
+# # Terraform sensitive files
+# **/.terraform/*
+# *.tfstate
+# *.tfstate.*
+# *.tfvars
+# *.pem
+# *.key
+# .env
+
+# # Great Expectations
+# docker/great_expectations/uncommitted/
+# docker/great_expectations/.ge_store_backend_id
+# docker/great_expectations/plugins/custom_data_docs/
+
+# # Python
+# __pycache__/
+# *.pyc
+# venv/
+
+# # IDE
+# .vscode/
+# .idea/
+# Great Expectations
+docker/great_expectations/uncommitted/
+docker/great_expectations/.ge_store_backend_id
+docker/great_expectations/plugins/custom_data_docs/
+*.pyc
+__pycache__/

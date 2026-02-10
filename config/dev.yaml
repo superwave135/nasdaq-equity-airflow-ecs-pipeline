@@ -1,0 +1,11 @@
+environment: dev
+aws_region: ap-southeast-1
+s3_bucket_name: nasdaq-stock-data-dev
+glue_database_name: nasdaq_warehouse_dev
+
+stock_symbols:
+  - AAPL
+  - GOOGL
+  - AMZN
+  - MSFT
+  - META
