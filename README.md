@@ -1,6 +1,14 @@
 # NASDAQ Stock Pipeline — Airflow on ECS Fargate
 
-A production-ready daily data pipeline that extracts stock quotes for NASDAQ-listed symbols, transforms them into a star schema using Apache Iceberg, and makes them queryable via Athena. Orchestrated by Apache Airflow running on AWS ECS Fargate with data quality validation via Great Expectations.
+[![AWS](https://img.shields.io/badge/AWS-Cloud-orange?logo=amazon-aws)](https://aws.amazon.com/)
+[![Terraform](https://img.shields.io/badge/Terraform-IaC-purple?logo=terraform)](https://www.terraform.io/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://www.python.org/)
+[![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-2.8-017CEE?logo=apache-airflow)](https://airflow.apache.org/)
+[![Apache Iceberg](https://img.shields.io/badge/Apache%20Iceberg-table%20format-00ADD8?logo=apache)](https://iceberg.apache.org/)
+[![Great Expectations](https://img.shields.io/badge/Great%20Expectations-data%20quality-FF6B35)](https://greatexpectations.io/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+A production-ready daily data pipeline that extracts stock quotes for NASDAQ-listed symbols, transforms them into a star schema using Apache Iceberg, and makes them queryable via Athena. Orchestrated by Apache Airflow on AWS ECS Fargate with data quality validation via Great Expectations.
 
 **Current scope:** 5 symbols (AAPL, MSFT, GOOGL, AMZN, NVDA) | **Scalable to:** 100+ symbols
 
