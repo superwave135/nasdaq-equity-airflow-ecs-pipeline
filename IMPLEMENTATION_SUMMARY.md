@@ -9,10 +9,10 @@ A production-ready NASDAQ stock data pipeline that processes daily stock quotes 
 ## Architecture
 
 ```
-EventBridge (daily schedule)
+Airflow Scheduler (cron: 0 2 * * * — daily 2 AM UTC / 10 AM SGT)
         │
         ▼
-   Airflow DAG (ECS Fargate)
+  Airflow DAG (ECS Fargate — LocalExecutor)
    ┌─────────────────────────────────────────┐
    │  1. Extract   → Lambda (FMP API → S3)   │
    │  2. Validate  → Great Expectations      │
