@@ -4,7 +4,6 @@ NASDAQ Stock Pipeline with Great Expectations Data Quality Validation
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 import great_expectations as gx
 import json
@@ -20,6 +19,63 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
+
+def run_glue_job(job_name: str, **context):
+    """
+    Run a Glue job with properly rendered processing_date.
+    Uses PythonOperator to ensure Jinja templates are rendered correctly,
+    avoiding the GlueJobOperator issue where script_args templates render as 'unknown'.
+
+    Args:
+        job_name: Name of the Glue job to run
+        context: Airflow context with execution_date
+    """
+    import boto3
+
+    # Calculate processing date (T-1)
+    execution_date = context['execution_date']
+    if isinstance(execution_date, str):
+        execution_date = datetime.fromisoformat(execution_date.replace('Z', '+00:00'))
+
+    processing_date = (execution_date - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    print(f"="*70)
+    print(f"Running Glue Job: {job_name}")
+    print(f"Execution Date: {execution_date}")
+    print(f"Processing Date (T-1): {processing_date}")
+    print(f"="*70)
+
+    client = boto3.client('glue', region_name='ap-southeast-1')
+
+    # Start the Glue job
+    response = client.start_job_run(
+        JobName=job_name,
+        Arguments={'--processing_date': processing_date}
+    )
+
+    job_run_id = response['JobRunId']
+    print(f"✅ Glue job started: {job_run_id}")
+
+    # Poll until job completes
+    import time
+    while True:
+        status_response = client.get_job_run(
+            JobName=job_name,
+            RunId=job_run_id
+        )
+        state = status_response['JobRun']['JobRunState']
+        print(f"  Status: {state}")
+
+        if state == 'SUCCEEDED':
+            print(f"✅ Glue job {job_name} SUCCEEDED for processing_date={processing_date}")
+            return True
+        elif state in ['FAILED', 'ERROR', 'TIMEOUT', 'STOPPED']:
+            error_msg = status_response['JobRun'].get('ErrorMessage', 'No error message')
+            raise Exception(f"Glue job {job_name} {state}: {error_msg}")
+
+        time.sleep(20)  # Poll every 20 seconds
+
+
 def setup_gx_expectations(**context):
     """
     Setup Great Expectations expectation suites if they don't exist.
@@ -27,80 +83,81 @@ def setup_gx_expectations(**context):
     """
     import os
     import subprocess
-    
+
     # Initialize GX context
     context_root = os.getenv('GX_DATA_CONTEXT_ROOT_DIR', '/opt/airflow/great_expectations')
     gx_context = gx.get_context(context_root_dir=context_root)
-    
+
     # Check if expectation suites exist
     suites = gx_context.list_expectation_suite_names()
-    
+
     expected_suites = [
         'fact_stock_daily_price_suite',
         'dim_stock_suite',
         'agg_stock_weekly_metrics_suite',
         'agg_stock_monthly_metrics_suite'
     ]
-    
+
     missing_suites = [suite for suite in expected_suites if suite not in suites]
-    
+
     if missing_suites:
-        print(f"Missing expectation suites: {missing_suites}")
-        print(f"Running create_expectations.py to generate them...")
-        
+        print(f"⚠️  Missing expectation suites: {missing_suites}")
+        print(f"🔧 Running create_expectations.py to generate them...")
+
         # Run the script to create expectations
         script_path = '/opt/airflow/scripts/create_expectations.py'
         if os.path.exists(script_path):
             result = subprocess.run(['python', script_path], capture_output=True, text=True)
             print(result.stdout)
             if result.returncode != 0:
-                print(f"Warning: Could not create all expectations")
+                print(f"⚠️ Warning: Could not create all expectations")
                 print(f"Error: {result.stderr}")
                 print(f"Continuing anyway - expectations will be created on first validation")
         else:
-            print(f"Script not found: {script_path}")
+            print(f"⚠️  Script not found: {script_path}")
     else:
-        print(f"All expectation suites exist: {suites}")
-    
+        print(f"✅ All expectation suites exist: {suites}")
+
     return True
+
 
 def run_gx_checkpoint(checkpoint_name: str, **context):
     """
     Run a Great Expectations checkpoint to validate data quality.
-    
+
     Args:
         checkpoint_name: Name of the checkpoint to run
         context: Airflow context with execution_date
-    
+
     Raises:
         Exception: If validation fails
     """
     import os
     from datetime import datetime, timedelta
-    
+
     # Initialize GX context
     context_root = os.getenv('GX_DATA_CONTEXT_ROOT_DIR', '/opt/airflow/great_expectations')
     gx_context = gx.get_context(context_root_dir=context_root)
-    
+
     # Get execution date and calculate processing date (T-1)
     execution_date = context['execution_date']
     if isinstance(execution_date, str):
         execution_date = datetime.fromisoformat(execution_date.replace('Z', '+00:00'))
-    
+
     # Use T-1 for processing_date to match Lambda's logic
     processing_date_dt = execution_date - timedelta(days=1)
     processing_date = processing_date_dt.strftime('%Y-%m-%d')
-    
+
     print(f"="*70)
     print(f"Running Great Expectations Checkpoint: {checkpoint_name}")
     print(f"Execution Date: {execution_date}")
     print(f"Processing Date (T-1): {processing_date}")
     print(f"="*70)
-    
+
     try:
         # Get the checkpoint
         checkpoint = gx_context.get_checkpoint(checkpoint_name)
-        
+
         # Build custom batch request with the processing date
         if checkpoint_name == 'daily_fact_validation':
             batch_request = {
@@ -108,14 +165,13 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
                 'data_connector_name': 'default_runtime_data_connector',
                 'data_asset_name': 'fact_stock_daily_price',
                 'runtime_parameters': {
-                    # 'query': f"SELECT * FROM nasdaq_airflow_warehouse_dev.fact_stock_daily_price WHERE processing_date = DATE '{processing_date}'"
                     'query': f"SELECT * FROM nasdaq_airflow_warehouse_dev.fact_stock_daily_price WHERE processing_date LIKE '{processing_date}%'"
                 },
                 'batch_identifiers': {
                     'default_identifier_name': f'daily_validation_{processing_date}'
                 }
             }
-            
+
             # Run checkpoint with custom batch request
             result = checkpoint.run(
                 validations=[{
@@ -126,26 +182,26 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
         else:
             # For other checkpoints, run normally
             result = checkpoint.run()
-        
+
         # Check if validation passed
         if result.success:
-            print(f"Data Quality Validation PASSED for {checkpoint_name}")
-            
+            print(f"✅ Data Quality Validation PASSED for {checkpoint_name}")
+
             # Print summary
             validation_results = result.list_validation_results()
             print(f"   Total validations: {len(validation_results)}")
-            
+
             for val_result in validation_results:
                 stats = val_result.statistics
                 print(f"   - {stats['evaluated_expectations']} expectations evaluated")
                 print(f"   - {stats['successful_expectations']} succeeded")
                 print(f"   - {stats['unsuccessful_expectations']} failed")
                 print(f"   - Success rate: {stats['success_percent']:.2f}%")
-            
+
             return True
         else:
-            print(f"Data Quality Validation FAILED for {checkpoint_name}")
-            
+            print(f"❌ Data Quality Validation FAILED for {checkpoint_name}")
+
             # Print detailed failure information
             validation_results = result.list_validation_results()
             for val_result in validation_results:
@@ -155,7 +211,7 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
                 print(f"   Successful: {stats['successful_expectations']}")
                 print(f"   Failed: {stats['unsuccessful_expectations']}")
                 print(f"   Success rate: {stats['success_percent']:.2f}%")
-                
+
                 # Print failed expectations
                 print(f"\n   Failed Expectations:")
                 for expectation_result in val_result.results:
@@ -164,12 +220,13 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
                         print(f"   - {expectation_type}")
                         if hasattr(expectation_result, 'result') and expectation_result.result:
                             print(f"     Details: {expectation_result.result}")
-            
+
             raise Exception(f"Data quality validation failed for {checkpoint_name}")
-            
+
     except Exception as e:
-        print(f"Error running checkpoint {checkpoint_name}: {str(e)}")
+        print(f"❌ Error running checkpoint {checkpoint_name}: {str(e)}")
         raise
+
 
 # Create the DAG
 with DAG(
@@ -193,36 +250,30 @@ with DAG(
     )
 
     # Task 2: Build dimension tables
-    build_stock_dimensions = GlueJobOperator(
+    # Uses PythonOperator wrapper to ensure processing_date is rendered correctly.
+    # GlueJobOperator does not render Jinja templates in script_args by default,
+    # causing processing_date to be passed as 'unknown'.
+    build_stock_dimensions = PythonOperator(
         task_id='build_stock_dimensions',
-        job_name='nasdaq-airflow-dimensions-dev',
-        script_args={
-            '--processing_date': '{{ macros.ds_add(ds, -1) }}',  # T-1 date
-        },
-        iam_role_name='nasdaq-airflow-ecs-glue-role-dev',
-        aws_conn_id='aws_default',
+        python_callable=run_glue_job,
+        op_kwargs={'job_name': 'nasdaq-airflow-dimensions-dev'},
+        provide_context=True,
     )
 
     # Task 3: Build fact tables
-    build_fact_tables = GlueJobOperator(
+    build_fact_tables = PythonOperator(
         task_id='build_fact_tables',
-        job_name='nasdaq-airflow-fact-dev',
-        script_args={
-            '--processing_date': '{{ macros.ds_add(ds, -1) }}',  # T-1 date
-        },
-        iam_role_name='nasdaq-airflow-ecs-glue-role-dev',
-        aws_conn_id='aws_default',
+        python_callable=run_glue_job,
+        op_kwargs={'job_name': 'nasdaq-airflow-fact-dev'},
+        provide_context=True,
     )
 
     # Task 4: Build aggregations
-    build_aggregations = GlueJobOperator(
+    build_aggregations = PythonOperator(
         task_id='build_aggregations',
-        job_name='nasdaq-airflow-aggregations-dev',
-        script_args={
-            '--processing_date': '{{ macros.ds_add(ds, -1) }}',  # T-1 date
-        },
-        iam_role_name='nasdaq-airflow-ecs-glue-role-dev',
-        aws_conn_id='aws_default',
+        python_callable=run_glue_job,
+        op_kwargs={'job_name': 'nasdaq-airflow-aggregations-dev'},
+        provide_context=True,
     )
 
     # Task 5: Setup GX expectations (AFTER tables exist)
