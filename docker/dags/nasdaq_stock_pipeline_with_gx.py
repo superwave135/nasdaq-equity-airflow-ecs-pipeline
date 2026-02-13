@@ -1,7 +1,7 @@
 """
 NASDAQ Stock Pipeline with Great Expectations Data Quality Validation
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
@@ -32,17 +32,16 @@ def run_glue_job(job_name: str, **context):
     """
     import boto3
 
-    # Calculate processing date (T-1)
-    execution_date = context['execution_date']
-    if isinstance(execution_date, str):
-        execution_date = datetime.fromisoformat(execution_date.replace('Z', '+00:00'))
-
-    processing_date = (execution_date - timedelta(days=1)).strftime('%Y-%m-%d')
+    # Match Lambda's date logic: always use now_utc - 1 day.
+    # This works for both scheduled runs (where execution_date is already T-1)
+    # and manual triggers (where execution_date is the current time).
+    # Lambda independently calculates trading_date = now_utc - 1 day,
+    # so Glue must use the same logic to read the correct S3 partition.
+    processing_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
 
     print(f"="*70)
     print(f"Running Glue Job: {job_name}")
-    print(f"Execution Date: {execution_date}")
-    print(f"Processing Date (T-1): {processing_date}")
+    print(f"Processing Date (T-1 from wall clock): {processing_date}")
     print(f"="*70)
 
     client = boto3.client('glue', region_name='ap-southeast-1')
@@ -54,7 +53,7 @@ def run_glue_job(job_name: str, **context):
     )
 
     job_run_id = response['JobRunId']
-    print(f"✅ Glue job started: {job_run_id}")
+    print(f"Glue job started: {job_run_id}")
 
     # Poll until job completes
     import time
@@ -67,7 +66,7 @@ def run_glue_job(job_name: str, **context):
         print(f"  Status: {state}")
 
         if state == 'SUCCEEDED':
-            print(f"✅ Glue job {job_name} SUCCEEDED for processing_date={processing_date}")
+            print(f"Glue job {job_name} SUCCEEDED for processing_date={processing_date}")
             return True
         elif state in ['FAILED', 'ERROR', 'TIMEOUT', 'STOPPED']:
             error_msg = status_response['JobRun'].get('ErrorMessage', 'No error message')
@@ -101,8 +100,8 @@ def setup_gx_expectations(**context):
     missing_suites = [suite for suite in expected_suites if suite not in suites]
 
     if missing_suites:
-        print(f"⚠️  Missing expectation suites: {missing_suites}")
-        print(f"🔧 Running create_expectations.py to generate them...")
+        print(f"Missing expectation suites: {missing_suites}")
+        print(f"Running create_expectations.py to generate them...")
 
         # Run the script to create expectations
         script_path = '/opt/airflow/scripts/create_expectations.py'
@@ -110,13 +109,13 @@ def setup_gx_expectations(**context):
             result = subprocess.run(['python', script_path], capture_output=True, text=True)
             print(result.stdout)
             if result.returncode != 0:
-                print(f"⚠️ Warning: Could not create all expectations")
+                print(f"Warning: Could not create all expectations")
                 print(f"Error: {result.stderr}")
                 print(f"Continuing anyway - expectations will be created on first validation")
         else:
-            print(f"⚠️  Script not found: {script_path}")
+            print(f"Script not found: {script_path}")
     else:
-        print(f"✅ All expectation suites exist: {suites}")
+        print(f"All expectation suites exist: {suites}")
 
     return True
 
@@ -139,19 +138,13 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
     context_root = os.getenv('GX_DATA_CONTEXT_ROOT_DIR', '/opt/airflow/great_expectations')
     gx_context = gx.get_context(context_root_dir=context_root)
 
-    # Get execution date and calculate processing date (T-1)
-    execution_date = context['execution_date']
-    if isinstance(execution_date, str):
-        execution_date = datetime.fromisoformat(execution_date.replace('Z', '+00:00'))
-
-    # Use T-1 for processing_date to match Lambda's logic
-    processing_date_dt = execution_date - timedelta(days=1)
-    processing_date = processing_date_dt.strftime('%Y-%m-%d')
+    # Match Lambda's date logic: always use now_utc - 1 day.
+    # Works for both scheduled and manual triggers.
+    processing_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
 
     print(f"="*70)
     print(f"Running Great Expectations Checkpoint: {checkpoint_name}")
-    print(f"Execution Date: {execution_date}")
-    print(f"Processing Date (T-1): {processing_date}")
+    print(f"Processing Date (T-1 from wall clock): {processing_date}")
     print(f"="*70)
 
     try:
@@ -185,7 +178,7 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
 
         # Check if validation passed
         if result.success:
-            print(f"✅ Data Quality Validation PASSED for {checkpoint_name}")
+            print(f"Data Quality Validation PASSED for {checkpoint_name}")
 
             # Print summary
             validation_results = result.list_validation_results()
@@ -200,7 +193,7 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
 
             return True
         else:
-            print(f"❌ Data Quality Validation FAILED for {checkpoint_name}")
+            print(f"Data Quality Validation FAILED for {checkpoint_name}")
 
             # Print detailed failure information
             validation_results = result.list_validation_results()
@@ -224,7 +217,7 @@ def run_gx_checkpoint(checkpoint_name: str, **context):
             raise Exception(f"Data quality validation failed for {checkpoint_name}")
 
     except Exception as e:
-        print(f"❌ Error running checkpoint {checkpoint_name}: {str(e)}")
+        print(f"Error running checkpoint {checkpoint_name}: {str(e)}")
         raise
 
 

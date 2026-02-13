@@ -80,17 +80,38 @@ print(f"\nTransformed records: {fact_df.count()}")
 print("\nSample transformed data:")
 fact_df.show(3, truncate=False)
 
-# Write to Iceberg table using the correct database
+# Write to Iceberg table using MERGE (upsert) to preserve historical data
 table_name = "glue_catalog.nasdaq_airflow_warehouse_dev.fact_stock_daily_price"
 print(f"\nWriting to table: {table_name}")
 
 try:
-    fact_df.writeTo(table_name).using("iceberg").tableProperty(
-        "format-version", "2"
-    ).createOrReplace()
-    
+    # Check if table already exists
+    try:
+        spark.table(table_name)
+        table_exists = True
+        print("Table exists — will MERGE (upsert) new data")
+    except Exception:
+        table_exists = False
+        print("Table does not exist — will CREATE")
+
+    if not table_exists:
+        fact_df.writeTo(table_name).using("iceberg").tableProperty(
+            "format-version", "2"
+        ).create()
+    else:
+        # MERGE: upsert by natural key (stock_symbol + trade_date)
+        # Updates existing rows for the same symbol/date, inserts new ones
+        fact_df.createOrReplaceTempView("new_fact_data")
+        spark.sql(f"""
+            MERGE INTO {table_name} t
+            USING new_fact_data s
+            ON t.stock_symbol = s.stock_symbol AND t.trade_date = s.trade_date
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+        """)
+
     print("Fact table build completed successfully")
-    
+
 except Exception as e:
     print(f"ERROR writing to Iceberg table: {str(e)}")
     raise

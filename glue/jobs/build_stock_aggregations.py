@@ -103,12 +103,32 @@ print("\nSample weekly aggregation:")
 weekly_agg.show(3, truncate=False)
 
 print("\nWriting agg_stock_weekly_metrics to Iceberg...")
+weekly_table = "glue_catalog.nasdaq_airflow_warehouse_dev.agg_stock_weekly_metrics"
 try:
-    weekly_agg.writeTo("glue_catalog.nasdaq_airflow_warehouse_dev.agg_stock_weekly_metrics") \
-        .tableProperty("format-version", "2") \
-        .partitionedBy("year", "week") \
-        .using("iceberg") \
-        .createOrReplace()
+    try:
+        spark.table(weekly_table)
+        table_exists = True
+        print("Table exists — will MERGE (upsert)")
+    except Exception:
+        table_exists = False
+        print("Table does not exist — will CREATE")
+
+    if not table_exists:
+        weekly_agg.writeTo(weekly_table) \
+            .tableProperty("format-version", "2") \
+            .partitionedBy("year", "week") \
+            .using("iceberg") \
+            .create()
+    else:
+        weekly_agg.createOrReplaceTempView("new_weekly_agg")
+        spark.sql(f"""
+            MERGE INTO {weekly_table} t
+            USING new_weekly_agg s
+            ON t.year = s.year AND t.week = s.week AND t.symbol = s.symbol
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+        """)
+
     print("agg_stock_weekly_metrics written successfully")
 except Exception as e:
     print(f"ERROR writing weekly metrics: {str(e)}")
@@ -147,12 +167,32 @@ print("\nSample monthly aggregation:")
 monthly_agg.show(3, truncate=False)
 
 print("\nWriting agg_stock_monthly_metrics to Iceberg...")
+monthly_table = "glue_catalog.nasdaq_airflow_warehouse_dev.agg_stock_monthly_metrics"
 try:
-    monthly_agg.writeTo("glue_catalog.nasdaq_airflow_warehouse_dev.agg_stock_monthly_metrics") \
-        .tableProperty("format-version", "2") \
-        .partitionedBy("year", "month") \
-        .using("iceberg") \
-        .createOrReplace()
+    try:
+        spark.table(monthly_table)
+        table_exists = True
+        print("Table exists — will MERGE (upsert)")
+    except Exception:
+        table_exists = False
+        print("Table does not exist — will CREATE")
+
+    if not table_exists:
+        monthly_agg.writeTo(monthly_table) \
+            .tableProperty("format-version", "2") \
+            .partitionedBy("year", "month") \
+            .using("iceberg") \
+            .create()
+    else:
+        monthly_agg.createOrReplaceTempView("new_monthly_agg")
+        spark.sql(f"""
+            MERGE INTO {monthly_table} t
+            USING new_monthly_agg s
+            ON t.year = s.year AND t.month = s.month AND t.symbol = s.symbol
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+        """)
+
     print("agg_stock_monthly_metrics written successfully")
 except Exception as e:
     print(f"ERROR writing monthly metrics: {str(e)}")
@@ -183,12 +223,32 @@ print("\nSample sector performance:")
 sector_performance.show(3, truncate=False)
 
 print("\nWriting agg_sector_performance to Iceberg...")
+sector_table = "glue_catalog.nasdaq_airflow_warehouse_dev.agg_sector_performance"
 try:
-    sector_performance.writeTo("glue_catalog.nasdaq_airflow_warehouse_dev.agg_sector_performance") \
-        .tableProperty("format-version", "2") \
-        .partitionedBy("date") \
-        .using("iceberg") \
-        .createOrReplace()
+    try:
+        spark.table(sector_table)
+        table_exists = True
+        print("Table exists — will MERGE (upsert)")
+    except Exception:
+        table_exists = False
+        print("Table does not exist — will CREATE")
+
+    if not table_exists:
+        sector_performance.writeTo(sector_table) \
+            .tableProperty("format-version", "2") \
+            .partitionedBy("date") \
+            .using("iceberg") \
+            .create()
+    else:
+        sector_performance.createOrReplaceTempView("new_sector_perf")
+        spark.sql(f"""
+            MERGE INTO {sector_table} t
+            USING new_sector_perf s
+            ON t.date = s.date AND t.sector = s.sector
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+        """)
+
     print("agg_sector_performance written successfully")
 except Exception as e:
     print(f"ERROR writing sector performance: {str(e)}")

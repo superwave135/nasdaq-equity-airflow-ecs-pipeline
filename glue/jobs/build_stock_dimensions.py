@@ -67,11 +67,40 @@ dim_stock = raw_df.select(
 print(f"dim_stock created with {dim_stock.count()} rows")
 
 print("\nWriting dim_stock to Iceberg...")
+dim_stock_table = "glue_catalog.nasdaq_airflow_warehouse_dev.dim_stock"
 try:
-    dim_stock.writeTo("glue_catalog.nasdaq_airflow_warehouse_dev.dim_stock") \
-        .tableProperty("format-version", "2") \
-        .using("iceberg") \
-        .createOrReplace()
+    # Check if table already exists
+    try:
+        spark.table(dim_stock_table)
+        table_exists = True
+        print("Table exists — will MERGE (upsert) by symbol")
+    except Exception:
+        table_exists = False
+        print("Table does not exist — will CREATE")
+
+    if not table_exists:
+        dim_stock.writeTo(dim_stock_table) \
+            .tableProperty("format-version", "2") \
+            .using("iceberg") \
+            .create()
+    else:
+        # MERGE: upsert by symbol, update mutable fields, preserve first_seen_date
+        dim_stock.createOrReplaceTempView("new_dim_stock")
+        spark.sql(f"""
+            MERGE INTO {dim_stock_table} t
+            USING new_dim_stock s
+            ON t.symbol = s.symbol
+            WHEN MATCHED THEN UPDATE SET
+                t.company_name = s.company_name,
+                t.exchange = s.exchange,
+                t.market_cap_tier = s.market_cap_tier,
+                t.sector = s.sector,
+                t.industry = s.industry,
+                t.last_seen_date = s.last_seen_date,
+                t.is_active = s.is_active
+            WHEN NOT MATCHED THEN INSERT *
+        """)
+
     print("dim_stock written successfully")
 except Exception as e:
     print(f"ERROR writing dim_stock: {str(e)}")
